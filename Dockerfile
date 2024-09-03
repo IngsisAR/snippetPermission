@@ -7,13 +7,6 @@ COPY  . /home/gradle/src
 
 WORKDIR /home/gradle/src
 
-# Necesario para las actions de docker publish
-ARG NEW_RELIC_LICENSE_KEY
-ENV NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
-
-ARG NEW_RELIC_APP_NAME
-ENV NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME}
-
 RUN gradle build --no-daemon
 
 # Etapa 2: Runtime
