@@ -1,9 +1,12 @@
 package austral.ingsisAR.snippetPermission
 
 import austral.ingsisAR.snippetPermission.permission.model.dto.CreatePermissionDTO
+import austral.ingsisAR.snippetPermission.permission.model.dto.GetPaginatedPermissionsDTO
+import austral.ingsisAR.snippetPermission.permission.model.dto.GetPermissionDTO
 import austral.ingsisAR.snippetPermission.permission.model.enum.PermissionType
 import austral.ingsisAR.snippetPermission.permission.service.PermissionService
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
@@ -12,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.http.MediaType
+import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.ContextConfiguration
@@ -20,8 +24,11 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delet
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 
 @SpringBootTest
 @ContextConfiguration
@@ -41,16 +48,16 @@ class PermissionControllerTest {
 
     private val testJwt = "test"
 
-//    @BeforeEach
-//    fun logIn() {
-//
-//        val jwt = Jwt.withTokenValue(testJwt)
-//            .header("alg", "RS256")
-//            .claim("email", "test@test.com")
-//            .subject("test@test.com")
-//            .build()
-//        `when`(jwtDecoder.decode(testJwt)).thenReturn(jwt)
-//    }
+    @BeforeEach
+    fun logIn() {
+
+        val jwt = Jwt.withTokenValue(testJwt)
+            .header("alg", "RS256")
+            .claim("email", "test@test.com")
+            .subject("test@test.com")
+            .build()
+        `when`(jwtDecoder.decode(testJwt)).thenReturn(jwt)
+    }
 
     @Test
     @WithMockUser(username = "testUser", authorities = ["SCOPE_write:snippets"])
@@ -101,30 +108,40 @@ class PermissionControllerTest {
         verify(permissionService).deleteSnippetPermissions(snippetId)
     }
 
-    //Fix the use of jwt in the test
-//    @Test
-//    @WithMockUser(username = "testUser", authorities = ["SCOPE_write:snippets"])
-//    fun getAllUserPermissions_withMultiplePermissions() {
-//        val pageNumber = 0
-//        val pageSize = 2
-//        val permissions = listOf(
-//            GetPermissionDTO("1", "snippet1", "testUser"),
-//            GetPermissionDTO("1", "snippet2", "testUser")
-//        )
-//        val paginatedPermissionsDTO = GetPaginatedPermissionsDTO(permissions, permissions.size)
-//
-//        `when`(permissionService.getAllUserPermissions("testUser", pageNumber, pageSize)).thenReturn(paginatedPermissionsDTO)
-//
-//        mockMvc.perform(
-//            get("/permissions/all")
-//                .param("page_number", pageNumber.toString())
-//                .param("page_size", pageSize.toString())
-//        )
-//            .andDo(MockMvcResultHandlers.print())
-//            .andExpect(status().isOk)
-//            .andExpect(content().json(objectMapper.writeValueAsString(paginatedPermissionsDTO)))
-//            .andReturn()
-//    }
+////    Fix the use of jwt in the test
+@Test
+@WithMockUser(username = "testUser", authorities = ["SCOPE_write:snippets"])
+fun getAllUserPermissions_withMultiplePermissions() {
+    val pageNumber = 0
+    val pageSize = 2
+    val permissions = listOf(
+        GetPermissionDTO("1", "snippet1", "testUser"),
+        GetPermissionDTO("1", "snippet2", "testUser")
+    )
+    val paginatedPermissionsDTO = GetPaginatedPermissionsDTO(permissions, permissions.size)
+
+    val jwt = Jwt.withTokenValue("token")
+        .header("alg", "none")
+        .claim("sub", "testUser")
+        .claim("scope", "write:snippets")
+        .build()
+
+    val authorities = listOf(SimpleGrantedAuthority("SCOPE_write:snippets"))
+    val authentication = JwtAuthenticationToken(jwt, authorities)
+    SecurityContextHolder.getContext().authentication = authentication
+
+    `when`(permissionService.getAllUserPermissions("testUser", pageNumber, pageSize)).thenReturn(paginatedPermissionsDTO)
+
+    mockMvc.perform(
+        get("/permissions/all")
+            .param("page_number", pageNumber.toString())
+            .param("page_size", pageSize.toString())
+    )
+        .andDo(MockMvcResultHandlers.print())
+        .andExpect(status().isOk)
+        .andExpect(content().json(objectMapper.writeValueAsString(paginatedPermissionsDTO)))
+        .andReturn()
+}
 
     @Test
     fun `request fails with no authorization`() {
@@ -146,7 +163,4 @@ class PermissionControllerTest {
         )
             .andExpect(status().isBadRequest)
     }
-
-
-
 }
