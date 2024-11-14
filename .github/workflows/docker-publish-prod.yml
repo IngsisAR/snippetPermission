@@ -29,8 +29,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PUBLISH_TOKEN }}
 
       # Este paso usa docker/metadata-action para extraer etiquetas y etiquetas que se aplicarán a la imagen especificada. El id "meta" permite que la salida de este paso se refiera en un paso posterior. El valor de las imágenes proporciona el nombre base para las etiquetas y etiquetas.
       - name: Extract metadata (tags, labels) for Docker
@@ -50,11 +50,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            USERNAME=${{ secrets.PUBLISH_TOKEN }}
-            TOKEN=${{ secrets.PACKAGE_TOKEN }}
-            NEW_RELIC_LICENSE_KEY=${{ secrets.NEW_RELIC_LICENSE_KEY }}
-            NEW_RELIC_APP_NAME=${{ secrets.NEW_RELIC_APP_NAME_PROD }}
 
       # Este paso genera una atestación de artefactos para la imagen, que es una declaración infalsificable sobre dónde y cómo se construyó. Aumenta la seguridad de la cadena de suministro para las personas que consumen la imagen. Para más información, vea "[AUTOTITLE](/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)."
       - name: Generate artifact attestation
@@ -77,19 +72,17 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Add SSH key
+      - name: Add known hosts
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.PROD_IP }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.PROD_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy to Production
         run: |
           ssh ingsisAHRE@${{ secrets.PROD_IP }} << 'EOF'
             cd snippetInfra
             sudo su
-            docker pull ${{ env.REGISTRY }}/$(echo "${{ github.repository }}-prod" | tr '[:upper:]' '[:lower:]'):main
-            docker-compose -f docker-compose.prod.yml up -d snippet_permission
+            docker-compose -f docker-compose.prod.yml pull snippet_operations
+            docker-compose -f docker-compose.prod.yml up -d snippet_operations
             docker image prune -f
           EOF
